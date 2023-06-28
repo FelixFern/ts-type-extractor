@@ -38,11 +38,10 @@ function activate(context) {
 					selection.end.line,
 					selection.end.character
 				);
-				editor;
 
 				const highlighted = editor.document.getText(selectionRange);
 				const noWhitespace = highlighted.replaceAll(/\s/g, "");
-				const regex = /const\s+(\w+)\s+=\s+(.+)/;
+				const regex = /(const|let|var)\s+(\w+)\s+=\s+(.+)/;
 				const match = highlighted.match(regex);
 
 				if (match) {
@@ -62,11 +61,12 @@ function activate(context) {
 						console.log("Value: ", varValue);
 						console.log("Type", typeof varValue);
 					}
+					vscode.window.showInformationMessage(
+						"Type Copied to Clipboard"
+					);
+				} else {
+					vscode.window.showErrorMessage("No Variable Selected!");
 				}
-
-				vscode.window.showInformationMessage(
-					"Type Copied to Clipboard"
-				);
 			} else {
 				vscode.window.showErrorMessage("No Variable Selected!");
 			}
