@@ -3,6 +3,25 @@ const vscode = require("vscode");
 /**
  * @param {vscode.ExtensionContext} context
  */
+
+const realValue = (value) => {
+	let varValue = value;
+	const parsedValue = parseFloat(value);
+
+	if (!isNaN(parsedValue)) {
+		varValue = parsedValue;
+	}
+
+	if (value === "true" || value === "false") {
+		varValue = value === "true";
+	} else if (value === "null") {
+		varValue = null;
+	} else if (value === "undefined") {
+		varValue = undefined;
+	}
+	return varValue;
+};
+
 function activate(context) {
 	console.log(
 		'Congratulations, your extension "ts-type-extractor" is now active!'
@@ -20,15 +39,37 @@ function activate(context) {
 					selection.end.character
 				);
 				editor;
+
 				const highlighted = editor.document.getText(selectionRange);
-				console.log(highlighted);
+				const noWhitespace = highlighted.replaceAll(/\s/g, "");
+				const regex = /const\s+(\w+)\s+=\s+(.+)/;
+				const match = highlighted.match(regex);
+
+				if (match) {
+					const varName = match[1];
+					const value = match[2].trim();
+
+					if (noWhitespace[noWhitespace.indexOf("=") + 1] === "{") {
+						console.log("Object");
+					} else if (
+						noWhitespace[noWhitespace.indexOf("=") + 1] === "["
+					) {
+						console.log("Array");
+					} else {
+						let varValue = realValue(value);
+						console.log("====");
+						console.log("Variable Name: ", varName);
+						console.log("Value: ", varValue);
+						console.log("Type", typeof varValue);
+					}
+				}
+
+				vscode.window.showInformationMessage(
+					"Type Copied to Clipboard"
+				);
 			} else {
 				vscode.window.showErrorMessage("No Variable Selected!");
 			}
-
-			vscode.window.showInformationMessage(
-				"Hello World from TS Type Extractor!"
-			);
 		}
 	);
 
