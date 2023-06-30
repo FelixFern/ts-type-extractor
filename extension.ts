@@ -1,10 +1,9 @@
 const vscode = require("vscode");
 const ncp = require("copy-paste");
+
 /**
  * @param {vscode.ExtensionContext} context
  */
-
-let types = { type: undefined, key: undefined, children: [] };
 
 const realValue = (val) => {
 	let varValue = val.replaceAll(";", "");
@@ -24,63 +23,95 @@ const realValue = (val) => {
 	return varValue;
 };
 
-const deconstructString = (string) => {
+const deconstructString = (string, isObject = true) => {
 	const deconstructed = [];
 	let start = 1;
 	let end = start;
 
+	let prevCommaIndex = 0;
+	let numOfColon = 0;
+
 	while (end < string.length) {
-		if (string[start] !== "[" && string[start] !== "{") {
-			if (string[end] !== "," && string[end] !== "]") {
-				end++;
-			} else {
-				deconstructed.push(string.substring(start, end));
-				start = end + 1;
-				end++;
-			}
-		} else if (string[start] === "[") {
-			let count = 0;
-			let foundClosing = false;
-			end++;
-			while (!foundClosing) {
-				if (string[end] === "[") {
-					count++;
+		if (isObject) {
+			if (string[start] !== "[" && string[start] !== "{") {
+				if (
+					string[end] !== "," &&
+					string[end] !== "]" &&
+					string[end] !== "}"
+				) {
 					end++;
-				} else if (string[end] === "]") {
-					if (count === 0) {
-						deconstructed.push(string.substring(start, end + 1));
-						start = end + 2;
-						end = start;
-						foundClosing = true;
+				} else {
+					deconstructed.push(string.substring(start, end));
+					start = end + 1;
+					end++;
+				}
+			} else if (string[start] === "[") {
+				let count = 0;
+				let foundClosing = false;
+				end++;
+				while (!foundClosing) {
+					if (string[end] === "[") {
+						count++;
+						end++;
+					} else if (string[end] === "]") {
+						if (count === 0) {
+							deconstructed.push(
+								string.substring(start, end + 1)
+							);
+							start = end + 2;
+							end = start;
+							foundClosing = true;
+						} else {
+							count--;
+							end++;
+						}
 					} else {
-						count--;
 						end++;
 					}
-				} else {
-					end++;
+				}
+			} else {
+				let count = 0;
+				let foundClosing = false;
+				end++;
+				while (!foundClosing) {
+					if (string[end] === "{") {
+						count++;
+						end++;
+					} else if (string[end] === "}") {
+						if (count === 0) {
+							deconstructed.push(
+								string.substring(start, end + 1)
+							);
+							start = end + 2;
+							end = start;
+							foundClosing = true;
+						} else {
+							count--;
+							end++;
+						}
+					} else {
+						end++;
+					}
 				}
 			}
 		} else {
-			let count = 0;
-			let foundClosing = false;
-			end++;
-			while (!foundClosing) {
-				if (string[end] === "{") {
-					count++;
+			if (end === string.length - 1) {
+				deconstructed.push(string.substring(start, end));
+			}
+			if (string[end] === ",") {
+				prevCommaIndex = end;
+				end++;
+			} else if (string[end] === ":") {
+				if (numOfColon === 0) {
+					numOfColon++;
 					end++;
-				} else if (string[end] === "}") {
-					if (count === 0) {
-						deconstructed.push(string.substring(start, end + 1));
-						start = end + 2;
-						end = start;
-						foundClosing = true;
-					} else {
-						count--;
-						end++;
-					}
 				} else {
+					deconstructed.push(string.substring(start, prevCommaIndex));
+					start = prevCommaIndex + 1;
 					end++;
 				}
+			} else {
+				end++;
 			}
 		}
 	}
@@ -88,21 +119,53 @@ const deconstructString = (string) => {
 	return deconstructed;
 };
 
-const checkArrayType = (array) => {
-	const temp = {
-		type: "array",
+const getType = (string) => {
+	let temp = {
+		type: null,
 		key: null,
-		children: [],
+		children: null,
+		value: null,
 	};
-
-	array.map((val) => {
-		temp.children.push({
-			type: typeof realValue(val),
+	const keyRegex = /^(\w+):(.*)$/;
+	const match = string.match(keyRegex);
+	if (match) {
+		temp = {
+			type: "objectChild",
+			key: match[1],
+			children: [],
+			value: deconstructString(match[2]),
+		};
+		for (let i = 0; i < temp.value.length; i++) {
+			temp.children.push(getType(temp.value[i]));
+		}
+	} else if (string[0] === "[") {
+		temp = {
+			type: "array",
+			key: null,
+			children: [],
+			value: deconstructString(string),
+		};
+		for (let i = 0; i < temp.value.length; i++) {
+			temp.children.push(getType(temp.value[i]));
+		}
+	} else if (string[0] === "{") {
+		temp = {
+			type: "object",
+			key: null,
+			children: [],
+			value: deconstructString(string, false),
+		};
+		for (let i = 0; i < temp.value.length; i++) {
+			temp.children.push(getType(temp.value[i]));
+		}
+	} else {
+		temp = {
+			type: typeof realValue(string),
 			key: null,
 			children: null,
-		});
-	});
-
+			value: realValue(string),
+		};
+	}
 	return temp;
 };
 
@@ -192,29 +255,12 @@ function activate(context) {
 				if (match) {
 					const varName = match[1];
 					const value = match[2].trim();
-
-					if (noWhitespace[noWhitespace.indexOf("=") + 1] === "{") {
-						let splittedObject = noWhitespace.split(",");
-
-						splittedObject[0] = splittedObject[0].substring(
-							splittedObject[0].indexOf("{")
-						);
-					} else if (
+					const splitted = noWhitespace.split("=");
+					if (
+						noWhitespace[noWhitespace.indexOf("=") + 1] === "{" ||
 						noWhitespace[noWhitespace.indexOf("=") + 1] === "["
 					) {
-						let splittedObject = noWhitespace.split(",");
-
-						splittedObject[0] = splittedObject[0]
-							.substring(splittedObject[0].indexOf("["))
-							.replaceAll("[", "");
-
-						splittedObject[splittedObject.length - 1] =
-							splittedObject[splittedObject.length - 1]
-								.replaceAll("]", "")
-								.replaceAll(";", "");
-
-						types = checkArrayType(splittedObject);
-						addToClipboard(varName, types);
+						console.log(getType(splitted[1]));
 					} else {
 						const varValue = realValue(value);
 						addToClipboard(
