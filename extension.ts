@@ -24,12 +24,74 @@ const realValue = (val) => {
 	return varValue;
 };
 
-const checkObjectType = (object) => {};
+const deconstructString = (string) => {
+	const deconstructed = [];
+	let start = 1;
+	let end = start;
+
+	while (end < string.length) {
+		if (string[start] !== "[" && string[start] !== "{") {
+			if (string[end] !== "," && string[end] !== "]") {
+				end++;
+			} else {
+				deconstructed.push(string.substring(start, end));
+				start = end + 1;
+				end++;
+			}
+		} else if (string[start] === "[") {
+			let count = 0;
+			let foundClosing = false;
+			end++;
+			while (!foundClosing) {
+				if (string[end] === "[") {
+					count++;
+					end++;
+				} else if (string[end] === "]") {
+					if (count === 0) {
+						deconstructed.push(string.substring(start, end + 1));
+						start = end + 2;
+						end = start;
+						foundClosing = true;
+					} else {
+						count--;
+						end++;
+					}
+				} else {
+					end++;
+				}
+			}
+		} else {
+			let count = 0;
+			let foundClosing = false;
+			end++;
+			while (!foundClosing) {
+				if (string[end] === "{") {
+					count++;
+					end++;
+				} else if (string[end] === "}") {
+					if (count === 0) {
+						deconstructed.push(string.substring(start, end + 1));
+						start = end + 2;
+						end = start;
+						foundClosing = true;
+					} else {
+						count--;
+						end++;
+					}
+				} else {
+					end++;
+				}
+			}
+		}
+	}
+
+	return deconstructed;
+};
 
 const checkArrayType = (array) => {
 	const temp = {
 		type: "array",
-		key: "",
+		key: null,
 		children: [],
 	};
 
