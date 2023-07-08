@@ -23,7 +23,7 @@ const realValue = (val) => {
 	return varValue;
 };
 
-const deconstructString = (string, isObject = true) => {
+const deconstructString = (string, isObject = false) => {
 	const deconstructed = [];
 	let start = 1;
 	let end = start;
@@ -32,7 +32,7 @@ const deconstructString = (string, isObject = true) => {
 	let numOfColon = 0;
 
 	while (end < string.length) {
-		if (isObject) {
+		if (!isObject) {
 			if (string[start] !== "[" && string[start] !== "{") {
 				if (
 					string[end] !== "," &&
@@ -153,7 +153,7 @@ const getType = (string) => {
 			type: "object",
 			key: null,
 			children: [],
-			value: deconstructString(string, false),
+			value: deconstructString(string, true),
 		};
 		for (let i = 0; i < temp.value.length; i++) {
 			temp.children.push(getType(temp.value[i]));
@@ -173,9 +173,40 @@ const capitalizeString = (value) => {
 	return value.charAt(0).toUpperCase() + value.slice(1);
 };
 
+const pushType = (type) => {
+	if (type.type === "array") {
+		const temp = [];
+		let outputType = "";
+		type.children.map((child) => {
+			temp.push(pushType(child));
+		});
+
+		const uniqueType = temp.filter(
+			(value, index, self) => self.indexOf(value) === index
+		);
+		uniqueType.map((type, index) => {
+			if (index === uniqueType.length - 1) {
+				if (uniqueType.length > 1) {
+					outputType += `${type})[]`;
+				} else {
+					outputType += `${type}[]`;
+				}
+			} else {
+				if (index === 0) {
+					outputType += `(${type}|`;
+				} else {
+					outputType += `${type}|`;
+				}
+			}
+		});
+		return outputType;
+	}
+	return type.type;
+};
+
 const addToClipboard = (varName, types) => {
 	let typeClipboard = `type T${capitalizeString(varName)}=`;
-
+	console.log(types);
 	if (typeof types !== "object" || types === null || types === undefined) {
 		ncp.copy(`${typeClipboard} ${types}`, function () {
 			vscode.window.showInformationMessage(
@@ -187,10 +218,7 @@ const addToClipboard = (varName, types) => {
 			const arrayType = [];
 
 			types.children.map((type) => {
-				if (typeof type.type === "object") {
-				} else {
-					arrayType.push(type.type);
-				}
+				arrayType.push(pushType(type));
 			});
 
 			const uniqueType = arrayType.filter(
@@ -213,13 +241,13 @@ const addToClipboard = (varName, types) => {
 				}
 			});
 
-			console.log(typeClipboard);
 			ncp.copy(`${typeClipboard}`, function () {
 				vscode.window.showInformationMessage(
 					"Type copied to the clipboard"
 				);
 			});
 		} else {
+			console.log(types);
 		}
 	}
 };
@@ -255,12 +283,12 @@ function activate(context) {
 				if (match) {
 					const varName = match[1];
 					const value = match[2].trim();
-					const splitted = noWhitespace.split("=");
+					let splitted = noWhitespace.split("=");
 					if (
 						noWhitespace[noWhitespace.indexOf("=") + 1] === "{" ||
 						noWhitespace[noWhitespace.indexOf("=") + 1] === "["
 					) {
-						console.log(getType(splitted[1]));
+						addToClipboard(varName, getType(splitted[1]));
 					} else {
 						const varValue = realValue(value);
 						addToClipboard(
